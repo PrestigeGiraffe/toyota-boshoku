@@ -1,6 +1,6 @@
 # Author: Johnson Yep
 # Date: April 17, 2026
-# Purpose: Computer vision color detection program used to detect and communicate rack locations to PLC in order to control AMR's at Toyota Boshoku
+# Purpose: Computer vision color detection program used to detect and communicate rack locations to PLC in order to control AMR's at Toyota Boshokrm -rf .gitu
 import threading
 import cv2
 import time
