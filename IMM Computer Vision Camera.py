@@ -645,7 +645,15 @@ try:
             blank = np.zeros((1080, 1920, 3), dtype=np.uint8)
             borderedText(blank, "Camera disconnected", (50, 100),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), (0, 0, 0))
+            borderedText(blank, "Press q to quit", (50, 170),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), (0, 0, 0))
+
             cv2.imshow(win, blank)
+
+            fullKey = cv2.waitKeyEx(1)
+            key = fullKey & 0xFF
+            if key == ord('q'):
+                break
             cv2.waitKey(1)
             continue
         
@@ -691,7 +699,7 @@ try:
                 borderedText(img, str("PLC Not Connected"), (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), (0, 0, 0))
             borderedText(img, str(f"ADJUST DETECTION (h)"), (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
             borderedText(img, str("EXIT DRAWING (c)"), (10, 400), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
-            borderedText(img, str("EXIT (q)"), (10, 1200), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 50, 255), (0, 0, 0))
+            borderedText(img, str("EXIT (q)"), (10, 1400), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 50, 255), (0, 0, 0))
             borderedText(img, str("GRID (g) | Delete (d)"), (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
             borderedText(img, str("SAVE REGIONS (s) | LOAD (l)"), (10, 550), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
             if prompt == Prompts.CHOOSING_HOMOGRAPHY_POINTS:
