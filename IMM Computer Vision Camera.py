@@ -1,5 +1,5 @@
 # Author: Johnson Yep
-# Date: April 17, 2026
+# Date: May 1, 2026
 # Purpose: Computer vision color detection program used to detect and communicate rack locations to PLC in order to control AMRs at Toyota Boshoku
 import threading
 import cv2
@@ -9,6 +9,7 @@ from pycomm3 import LogixDriver
 from enum import Enum, auto
 import json
 import os
+
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;3000000"
 
 class DrawModes(Enum):
@@ -116,7 +117,7 @@ class LatestFrameCamera:
     def release(self):
         self.running = False
         self._mark_disconnected()
-cap = LatestFrameCamera("rtsp://admin:Maintenance1@192.168.1.64:554/Streaming/channels/101")
+cap = LatestFrameCamera("rtsp://admin:Maintenance1@172.17.35.76:554/Streaming/channels/101")
 
 win = "IMM Computer Vision"
 cv2.namedWindow(win, cv2.WINDOW_NORMAL)
@@ -317,11 +318,14 @@ def grid(img, borderSize, mask):
                     break
                 furthestAvailable +=1
 
+            currentHeartbeatState = plc.read("IMM_Python_Program.Heartbeat")
+
             plc.write(
                 #(f"CV_Grids.Grid_{gridNum+1}[0]{{32}}", writeArray[:32]),
                 #(f"CV_Grids.Grid_{gridNum+1}[32]{{32}}", writeArray[32:64]),
                 #(f"CV_Grids.Grid_{gridNum+1}[64]{{32}}", writeArray[64:96]),
-                (f"CV_Row_Place_Spots[{gridNum+1}]", furthestAvailable)
+                (f"CV_Row_Place_Spots[{gridNum+1}]", furthestAvailable),
+                {f"IMM_Python_Program.Heartbeat", not currentHeartbeatState}
             )
 
     
@@ -329,7 +333,7 @@ def grid(img, borderSize, mask):
     saveGridValues_ONS = False
 
 
-def borderedText(img, text, org, font, scale, text_color, border_color, text_thickness=2, border_thickness=5):
+def borderedText(img, text, org, font, scale, text_color, border_color, text_thickness=3, border_thickness=10):
     cv2.putText(img, text, org, font, scale, border_color, border_thickness, cv2.LINE_AA)
     cv2.putText(img, text, org, font, scale, text_color, text_thickness, cv2.LINE_AA)
 
@@ -694,36 +698,38 @@ try:
             borderedText(img, str("FPS: ") + str(int(fps)), (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 200, 50), (0, 0, 0))
             # Instructions
             if plc.connected:
-                borderedText(img, str(f"PLC Connected ({PLC_IP})"), (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), (0, 0, 0))
+                borderedText(img, str(f"PLC Connected ({PLC_IP})"), (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), (0, 0, 0))
             else:
-                borderedText(img, str("PLC Not Connected"), (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), (0, 0, 0))
-            borderedText(img, str(f"ADJUST DETECTION (h)"), (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
-            borderedText(img, str("EXIT DRAWING (c)"), (10, 400), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
-            borderedText(img, str("EXIT (q)"), (10, 1400), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 50, 255), (0, 0, 0))
-            borderedText(img, str("GRID (g) | Delete (d)"), (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
-            borderedText(img, str("SAVE REGIONS (s) | LOAD (l)"), (10, 550), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
+                borderedText(img, str("PLC Not Connected"), (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), (0, 0, 0))
+            borderedText(img, str(f"ADJUST DETECTION (h)"), (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
+            borderedText(img, str(f"ADJUST LENS DISTORTION (j)"), (10, 400), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
             if prompt == Prompts.CHOOSING_HOMOGRAPHY_POINTS:
                 borderedText(img, str("CLICK 4 POINTS IN THIS ORDER: TL -> TR -> BL -> BR"), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 3, (50, 255, 50),(0, 0, 0), 10, 12)
             else:
-                borderedText(img, str(f"CHOOSE HOMOGRAPHY POINTS (p): {homographyPoints}"), (10, 600), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
+                borderedText(img, str(f"CHOOSE HOMOGRAPHY POINTS (p): {homographyPoints}"), (10, 500), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
+            borderedText(img, str(f"HOMOGRAPHY (u): {homographyOn}"), (10, 550), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
 
-            borderedText(img, str(f"HOMOGRAPHY (u): {homographyOn}"), (10, 650), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
-            borderedText(img, str(f"ADJUST LENS DISTORTION (j)"), (10, 700), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
-            borderedText(img, str(f"HIDE/SHOW UI (`)"), (10, 750), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
+            borderedText(img, str("GRID (g) | Delete (d)"), (10, 650), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
+            borderedText(img, str("EXIT DRAWING (c)"), (10, 700), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
+            borderedText(img, str("SAVE REGIONS (s) | LOAD (l)"), (10, 750), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
+
+
+            borderedText(img, str(f"HIDE/SHOW UI (`)"), (10, 850), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
+            borderedText(img, str("EXIT (q)"), (10, 900), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (50, 50, 255), (0, 0, 0))
 
             # Information
-            borderedText(img, str(f'MODE: { drawMode }'), (10, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), (0, 0, 0))
+            #borderedText(img, str(f'MODE: { drawMode }'), (10, 200), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), (0, 0, 0))
             if (drawMode == DrawModes.GRID) and prompt == Prompts.NONE:
-                borderedText(img, str(f"Grid Size: {gridRows}x{gridColumns}"), (10, 1050), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 255, 50), (0, 0, 0))
-                borderedText(img, str(f"Reversed Detection ([): {reverseGridDetection}"), (10, 1100), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 255, 50), (0, 0, 0))
-                borderedText(img, str("Save Current Grid Values (])"), (10, 1150), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 255, 50), (0, 0, 0)) 
-                borderedText(img, str(f"Compare Threshold To Saved Values (\\): {compareToSavedGridValues}"), (10, 1200), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 255, 50), (0, 0, 0))
-                borderedText(img, str(f"Number of Grids: {len(gridObjects)}"), (10, 1250), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 255, 50), (0, 0, 0))
+                borderedText(img, str(f"Grid Size: {gridRows}x{gridColumns}"), (10, 1050), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (50, 255, 50), (0, 0, 0))
+                borderedText(img, str(f"Reversed Detection ([): {reverseGridDetection}"), (10, 1100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (50, 255, 50), (0, 0, 0))
+                borderedText(img, str("Save Current Grid Values (])"), (10, 1150), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (50, 255, 50), (0, 0, 0))
+                borderedText(img, str(f"Compare Threshold To Saved Values (\\): {compareToSavedGridValues}"), (10, 1200), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (50, 255, 50), (0, 0, 0))
+                borderedText(img, str(f"Number of Grids: {len(gridObjects)}"), (10, 1250), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (50, 255, 50), (0, 0, 0))
 
             if (prompt == Prompts.ROWS):
-                borderedText(img, str("Enter Rows (1-9)"), (10, 1050), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 255, 50), (0, 0, 0), 10, 12)
+                borderedText(img, str("Enter Rows (1-9)"), (10, 1050), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (50, 255, 50), (0, 0, 0))
             elif (prompt == Prompts.COLUMNS):
-                borderedText(img, str("Enter Columns (1-9)"), (10, 1050), cv2.FONT_HERSHEY_SIMPLEX, 1, (50, 255, 50), (0, 0, 0), 10, 12)
+                borderedText(img, str("Enter Columns (1-9)"), (10, 1050), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (50, 255, 50), (0, 0, 0))
 
 
         # Distortion adjustion
