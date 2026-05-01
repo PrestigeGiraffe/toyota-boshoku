@@ -126,12 +126,36 @@ cv2.setWindowProperty(win, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 # PLC
 PLC_IP = '172.17.35.20/2'
 plc = LogixDriver(PLC_IP)
-writeCooldown = 24
-try:
-    plc.open()
-    print("Connected:", plc.connected)
-except Exception as e:
-    print(e)
+lastPLCReconnectAttempt = 0
+plcReconnectInterval = 5.0
+
+def ensure_plc_connected():
+    global lastPLCReconnectAttempt
+
+    if plc.connected:
+        return True
+
+    now = time.monotonic()
+
+    if now - lastPLCReconnectAttempt < plcReconnectInterval:
+        return False
+
+    lastPLCReconnectAttempt = now
+
+    try:
+        plc.close()
+    except:
+        pass
+
+    try:
+        plc.open()
+        print("PLC reconnected:", plc.connected)
+        return plc.connected
+    except Exception as e:
+        print(f"PLC reconnect failed: {e}")
+        return False
+    
+ensure_plc_connected()
 
 currX = 0
 currY = 0
@@ -216,13 +240,19 @@ saveGridValues_ONS = False
 savedGridValues = []
 compareToSavedGridValues = False
 compareDetectionThreshold = 0
+heartbeat = False
+plcWriteInterval = 1.0
+lastPLCWrite = 0
+
 def grid(img, borderSize, mask):
-    global saveGridValues_ONS, savedGridValues
+    global saveGridValues_ONS, savedGridValues, heartbeat, lastPLCWrite
     if prompt == Prompts.CHOOSING_HOMOGRAPHY_POINTS:
         return
 
     if not gridObjects:
         return
+    
+    plcWrites = []
 
     for gridNum, gridObj in enumerate(gridObjects):
         start = gridObj["start"]
@@ -300,35 +330,39 @@ def grid(img, borderSize, mask):
                     cv2.rectangle(img, (int(startX), int(startY)),
                                   (int(endX), int(endY)), (0, 255, 0), borderSize + 2)
         
+        furthestAvailable = 0
 
-        if plc.connected and frameCounter % writeCooldown == 0:
-            #flat = array.flatten().tolist()
-            #writeArray = [False] * 96
-            #writeArray[:len(flat)] = flat
-
-            furthestAvailable = 0
-
-            foundRack = False
-            for j in range(columns):
-                for i in range(rows):
-                    if array[i][j]:
-                        foundRack = True
-                        break
-                if foundRack:
+        foundRack = False
+        for j in range(columns):
+            for i in range(rows):
+                if array[i][j]:
+                    foundRack = True
                     break
-                furthestAvailable +=1
+            if foundRack:
+                break
+            furthestAvailable +=1
+        plcWrites.append((f"CV_Row_Place_Spots[{gridNum+1}]", furthestAvailable))
+    now = time.monotonic()
 
-            currentHeartbeatState = plc.read("IMM_Python_Program.Heartbeat")
+    if ensure_plc_connected() and now - lastPLCWrite >= plcWriteInterval:
+        nextHeartbeat = not heartbeat
+        plcWrites.append(("IMM_Python_Program.Heartbeat", nextHeartbeat))
 
-            plc.write(
-                #(f"CV_Grids.Grid_{gridNum+1}[0]{{32}}", writeArray[:32]),
-                #(f"CV_Grids.Grid_{gridNum+1}[32]{{32}}", writeArray[32:64]),
-                #(f"CV_Grids.Grid_{gridNum+1}[64]{{32}}", writeArray[64:96]),
-                (f"CV_Row_Place_Spots[{gridNum+1}]", furthestAvailable),
-                {f"IMM_Python_Program.Heartbeat", not currentHeartbeatState}
-            )
+        try:
+            results = plc.write(*plcWrites)
 
-    
+            writeOk = all(result.error is None for result in results)
+
+            if writeOk:
+                heartbeat = nextHeartbeat
+                lastPLCWrite = now
+            else:
+                for result in results:
+                    if result.error:
+                        print(result)
+
+        except Exception as e:
+            print(f"PLC write failed: {e}")
 
     saveGridValues_ONS = False
 
@@ -449,8 +483,6 @@ def doNothing(x):
 loadDetection()
 upperBound = np.array([u_h, u_s, u_v])
 lowerBound = np.array([l_h, l_s, l_v])
-
-frameCounter = 0
 
 homographyPoints = []
 hasPoints = False
@@ -661,8 +693,6 @@ try:
             cv2.waitKey(1)
             continue
         
-        frameCounter += 1
-
         if distortionOn:
             h_img, w_img = img.shape[:2]
             if distortion_dirty or map1 is None:
@@ -832,4 +862,8 @@ try:
 finally:
     saveDetection()
     cap.release()
+    try:
+        plc.close()
+    except Exception:
+        pass
     cv2.destroyAllWindows()
